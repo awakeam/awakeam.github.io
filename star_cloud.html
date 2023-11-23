@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Star Cloud</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+	</head>
+	<body>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "./js/three.module.min.js",
+          "EffectComposer": "./js/EffectComposer.js",
+          "RenderPass": "./js/RenderPass.js",
+          "ShaderPass": "./js/ShaderPass.js",
+          "BloomPass": "./js/BloomPass.js",
+          "FilmPass": "./js/FilmPass.js",
+          "FocusShader": "./js/FocusShader.js",
+          "OutputPass": "./js/OutputPass.js"
+				}
+			}
+		</script>
+
+		<script type="module">
+
+			import * as THREE from 'three';
+			import { EffectComposer } from 'EffectComposer';
+			import { RenderPass } from 'RenderPass';
+			import { ShaderPass } from 'ShaderPass';
+			import { BloomPass } from 'BloomPass';
+			import { FilmPass } from 'FilmPass';
+			import { FocusShader } from 'FocusShader';
+			import { OutputPass } from 'OutputPass';
+
+			let camera, scene, renderer, parameters;
+      let composer, effectFocus;
+			let mouseX = 0, mouseY = 0;
+
+			let windowHalfX = window.innerWidth / 2;
+			let windowHalfY = window.innerHeight / 2;
+
+			const materials = [];
+
+			init();
+			animate();
+
+			function init() {
+
+				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 2000 );
+				camera.position.z = 1000;
+
+				scene = new THREE.Scene();
+				scene.fog = new THREE.FogExp2( 0x000000, 0.0008 );
+
+				const geometry = new THREE.BufferGeometry();
+				const vertices = [];
+
+				const textureLoader = new THREE.TextureLoader();
+
+				const assignSRGB = ( texture ) => {
+
+					texture.colorSpace = THREE.SRGBColorSpace;
+
+				};
+
+				// const sprite1 = textureLoader.load( 'textures/sprites/snowflake1.png', assignSRGB );
+				// const sprite2 = textureLoader.load( 'textures/sprites/snowflake2.png', assignSRGB );
+				// const sprite3 = textureLoader.load( 'textures/sprites/snowflake3.png', assignSRGB );
+				// const sprite4 = textureLoader.load( 'textures/sprites/snowflake4.png', assignSRGB );
+				// const sprite5 = textureLoader.load( 'textures/sprites/snowflake5.png', assignSRGB );
+
+				for ( let i = 0; i < 1000; i ++ ) {
+
+					const x = Math.random() * 2000 - 1000;
+					const y = Math.random() * 2000 - 1000;
+					const z = Math.random() * 2000 - 1000;
+
+					vertices.push( x, y, z );
+
+				}
+
+				geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
+
+
+
+        for ( let i = 0; i < 100; i++ ) {
+
+          const color = [Math.random(), Math.random(), 0.5]
+          // const color = [Math.random() * 255, Math.random() * 255, Math.random() * 255]
+
+          materials[i] = new THREE.PointsMaterial( { size: 1, blending: THREE.AdditiveBlending, depthTest: false, transparent: true } );
+          // materials[i].color.setHSL( color[ 0 ], color[ 1 ], color[ 2 ], THREE.SRGBColorSpace );
+          materials[i].color.setRGB( color[ 0 ], color[ 1 ], color[ 2 ], THREE.SRGBColorSpace );
+
+          const particles = new THREE.Points( geometry, materials[i] );
+
+          particles.rotation.x = Math.random() * 6;
+          particles.rotation.y = Math.random() * 6;
+          particles.rotation.z = Math.random() * 6;
+
+          scene.add( particles );
+        }
+
+
+				//
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+				document.body.style.touchAction = 'none';
+				document.body.addEventListener( 'pointermove', onPointerMove );
+
+        // postprocessing
+
+				const renderModel = new RenderPass( scene, camera );
+				const effectBloom = new BloomPass( 0.5 );
+				const effectFilm = new FilmPass();
+
+				effectFocus = new ShaderPass( FocusShader );
+
+				effectFocus.uniforms[ 'screenWidth' ].value = window.innerWidth * window.devicePixelRatio;
+				effectFocus.uniforms[ 'screenHeight' ].value = window.innerHeight * window.devicePixelRatio;
+
+				const outputPass = new OutputPass();
+
+				composer = new EffectComposer( renderer );
+
+				composer.addPass( renderModel );
+				composer.addPass( effectBloom );
+				composer.addPass( effectFilm );
+				composer.addPass( effectFocus );
+				composer.addPass( outputPass );
+
+				window.addEventListener( 'resize', onWindowResize );
+
+			}
+
+			function onWindowResize() {
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+        composer.setSize( window.innerWidth, window.innerHeight );
+
+        effectFocus.uniforms[ 'screenWidth' ].value = window.innerWidth * window.devicePixelRatio;
+				effectFocus.uniforms[ 'screenHeight' ].value = window.innerHeight * window.devicePixelRatio;
+
+			}
+
+			function onPointerMove( event ) {
+
+				if ( event.isPrimary === false ) return;
+
+				mouseX = event.clientX - windowHalfX;
+				mouseY = event.clientY - windowHalfY;
+
+			}
+
+			//
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				render();
+
+			}
+
+			function render() {
+
+				const time = Date.now() * 0.00005;
+
+				camera.position.x += ( mouseX - camera.position.x ) * 0.05;
+				camera.position.y += ( - mouseY - camera.position.y ) * 0.05;
+        camera.position.z -= 0.1;
+
+				camera.lookAt( scene.position );
+
+				for ( let i = 0; i < scene.children.length; i ++ ) {
+
+					const object = scene.children[ i ];
+
+					if ( object instanceof THREE.Points ) {
+
+						// object.rotation.y = time * ( i < 4 ? i + 1 : - ( i + 1 ) );
+
+					}
+
+				}
+
+				//for ( let i = 0; i < materials.length; i ++ ) {
+					//const color = parameters[ i ][ 0 ];
+					//const h = ( 360 * ( color[ 0 ] + time ) % 360 ) / 360;
+					//materials[ i ].color.setHSL( h, color[ 1 ], color[ 2 ], THREE.SRGBColorSpace );
+				//}
+
+				renderer.render( scene, camera );
+
+        // composer.render( 0.01 );
+			}
+
+		</script>
+	</body>
+</html>
